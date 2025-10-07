@@ -1,6 +1,6 @@
 ---
-title: "Reproducibility Report for Study X by Sample & Sample (20xx, Psychological Science)"
-author: "Reproducibility Project Author[s] (contact information)"
+title: "Reproducibility Report for 'Scaling up the think-aloud method' by Wurgaft et al. (Proceedings of the Annual Meeting of the Cognitive Science Society 47, 2025)"
+author: "Linas Nasvytis (linasmn@stanford.edu)"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 format:
   html:
@@ -11,53 +11,78 @@ format:
 <!-- Reproducibility reports should all use this template to standardize reporting across projects. These reports will be public supplementary materials that accompany the summary report(s) of the aggregate results. -->
 
 ## Introduction
+<!-- [No abstract is needed.]  Each reproducibility project will have a straightforward, no frills report of the study and reproducibility results. These reports will be publicly available as supplementary material for the aggregate report(s) of the project as a whole.  Also, to maximize project integrity, the intro and methods will be written and critiqued in advance of your attempt to reproduce the results. Introductions can be just 1-2 paragraphs clarifying the main idea of the original study, the target finding for your reproducibility attempt, and any other essential information.  It will NOT have a literature review -- that is in the original publication. You can write both the introduction and the methods in past tense.-->
+The target study introduces an automated pipeline for transcribing, annotating, and analyzing verbal reasoning traces at scale, using the Game of 24 as a testbed. In the experiment, 640 participants were prompted to think aloud while solving arithmetic problems. The authors collected 4,947 high-quality verbal reports, transcribed them using Whisper large-v3, and annotated them as reasoning graphs using LLMs. These graph representations allowed for detailed analysis of participants’ reasoning strategies, including operation usage, subgoal setting, and consistency across trials. 
 
-[No abstract is needed.]  Each reproducibility project will have a straightforward, no frills report of the study and reproducibility results. These reports will be publicly available as supplementary material for the aggregate report(s) of the project as a whole.  Also, to maximize project integrity, the intro and methods will be written and critiqued in advance of your attempt to reproduce the results. Introductions can be just 1-2 paragraphs clarifying the main idea of the original study, the target finding for your reproducibility attempt, and any other essential information.  It will NOT have a literature review -- that is in the original publication. You can write both the introduction and the methods in past tense.  
-
-**Clarify key analysis of interest here**  You can also pre-specify additional analyses you plan to do.
+The key result I aim to reproduce is the transformation of raw think-aloud audio into structured reasoning graphs, and in addition, the resulting insights about human reasoning patterns, including success predictors and consistency measures. Additional exploratory analyses may include re-running the annotation pipeline with alternate LLMs or modifying graph representation parameters to test robustness.
 
 ### Justification for choice of study
+<!-- Please describe why you chose to reproduce the results of this study.-->
+Although I am in academic proximity to the authors, my PhD research focuses directly on analyzing chain-of-thought traces across both humans and language models. This study is one of the **only** papers to provide large-scale process-level human reasoning data derived from verbal protocols. Given the immensely strong methodological alignment with my research agenda, replicating this work would be very helpful for my research, allow me to build expertise in automated verbal report analysis and contribute to the broader scientific effort to validate new scalable approaches of verbal protocol analysis. 
 
-Please describe why you chose to reproduce the results of this study.
+Furthermore, the original authors have agreed to share the full dataset and analysis code, which makes full reproducibility feasible.
 
 ### Anticipated challenges
-
-Do you anticipate running into any challenges when attempting to reproduce these result(s)? If so please, list them here.
+<!--Do you anticipate running into any challenges when attempting to reproduce these result(s)? If so please, list them here.-->
+- Minor inconsistencies may arise due to updates in underlying tools (e.g., Whisper, Claude 3.5, or Python libraries).
+- Access to Claude 3.5 Sonnet may become limited or require API credits.
+- Some randomness in LLM outputs (e.g., during graph code generation) may introduce variability unless seeds and exact parameters are controlled.
+- Transcripts filtered as irrelevant by LLMs might vary slightly due to model versioning.
 
 ### Links
 
-Project repository (on Github): 
+Project repository (on Github): https://github.com/psych251/wurgaft2025
 
-Original paper (as hosted in your repo): 
+Original paper (as hosted in your repo): https://arxiv.org/pdf/2505.23931?
 
 ## Methods
 
 ### Description of the steps required to reproduce the results
-
-Please describe all the steps necessary to reproduce the key result(s) of this study. 
-
+<!--Please describe all the steps necessary to reproduce the key result(s) of this study.-->
+1. **Download shared data** (raw audio recordings, metadata, response logs) from the authors’ OSF/GitHub repository.
+2. **Transcribe all audio recordings** using OpenAI Whisper large-v3 with specified parameters (beam size 5, temperature fallback, silence threshold 20s).
+3. **Filter irrelevant transcripts** via rule-based and LLM-based classification (Llama 3.3 70B) using predefined prompts.
+4. **Generate reasoning graphs** from filtered transcripts using Claude 3.5 Sonnet, guided by 10 in-context examples and a shared `GraphBuilder` class.
+5. **Validate and repair generated graphs** using automated error detection and iterative model reruns (up to 5 iterations, temperature increased if errors persist).
+6. **Analyze graphs** to compute:
+   - Operation usage frequencies
+   - Subgoal types and frequencies
+   - Consistency metrics (Gini index over subsequences)
+   - Predictors of successful vs. failed trials
+   
 ### Differences from original study
+<!--Explicitly describe known differences in the analysis pipeline between the original paper and yours (e.g., computing environment). The goal, of course, is to minimize those differences, but differences may occur. Also, note whether such differences are anticipated to influence your ability to reproduce the original results.-->
+- If Claude 3.5 Sonnet is unavailable, I may substitute with alternative language models for annotation — including equally or more capable models. I will also compare these with open-weight alternatives (e.g., DeepSeek V3) to evaluate replicability across model classes.
+- Computational environment may differ (e.g., Python version, GPU setup).
+- Small divergences in Whisper transcription may occur due to model updates.
+- If needed, reproducibility of LLM steps may be increased by seeding or prompt standardization.
 
-Explicitly describe known differences in the analysis pipeline between the original paper and yours (e.g., computing environment). The goal, of course, is to minimize those differences, but differences may occur. Also, note whether such differences are anticipated to influence your ability to reproduce the original results.
 
 ## Project Progress Check 1
-
 ### Measure of success
-
-Please describe the outcome measure for the success or failure of your reproduction and how this outcome will be computed.
+<!-- Please describe the outcome measure for the success or failure of your reproduction and how this outcome will be computed.-->
+The reproduction will be considered successful if:
+- I can generate structured graphs from at least 90% of the same usable trials (≈4450 trials).
+- Key reported patterns (e.g., operation frequency, subgoal usage, Gini indices) are reproduced within a reasonable margin (±10% of original figures).
+- Agreement between reproduced and original graphs (via edit distance) matches reported reliability ranges (e.g., similar distribution of Claude vs. human edit distances).
 
 
 ### Pipeline progress
+<!-- Earlier in this report, you described the steps necessary to reproduce the key result(s) of this study. Please describe your progress on each of these steps (e.g., data preprocessing, model fitting, model evaluation).-->
+Done:
+- Raw audio data permission obtained
 
-Earlier in this report, you described the steps necessary to reproduce the key result(s) of this study. Please describe your progress on each of these steps (e.g., data preprocessing, model fitting, model evaluation).
-
+Todo:
+- Whisper transcription pipeline
+- Graph annotation pipeline. 
+- Graph validation and repair automation not yet tested.
+- Downstream analysis pipeline.
 
 ## Results
+As I haven't obtained the data, I don't yet have code for data preparation or any results.
 
 ### Data preparation
-
-Data preparation following the analysis plan.
-	
+<!--Data preparation following the analysis plan.-->
 ```{r include=F}
 ### Data Preparation
 
@@ -71,21 +96,19 @@ Data preparation following the analysis plan.
 ```
 
 ### Key analysis
-
-The analyses as specified in the analysis plan.  
+<!--The analyses as specified in the analysis plan. -->
 
 *Side-by-side graph with original graph is ideal here*
 
 ### Exploratory analyses
-
-Any follow-up analyses desired (not required).  
+<!-- Any follow-up analyses desired (not required).-->  
 
 ## Discussion
 
 ### Summary of Reproduction Attempt
 
-Open the discussion section with a paragraph summarizing the primary result from the key analysis and assess whether you successfully reproduced it, partially reproduced it, or failed to reproduce it.  
+<!--Open the discussion section with a paragraph summarizing the primary result from the key analysis and assess whether you successfully reproduced it, partially reproduced it, or failed to reproduce it.-->
 
 ### Commentary
 
-Add open-ended commentary (if any) reflecting (a) insights from follow-up exploratory analysis of the dataset, (b) assessment of the meaning of the successful or unsuccessful reproducibility attempt - e.g., for a failure to reproduce the original findings, are the differences between original and present analyses ones that definitely, plausibly, or are unlikely to have been moderators of the result, and (c) discussion of any objections or challenges raised by the current and original authors about the reproducibility attempt (if you contacted them).  None of these need to be long.
+<!-- Add open-ended commentary (if any) reflecting (a) insights from follow-up exploratory analysis of the dataset, (b) assessment of the meaning of the successful or unsuccessful reproducibility attempt - e.g., for a failure to reproduce the original findings, are the differences between original and present analyses ones that definitely, plausibly, or are unlikely to have been moderators of the result, and (c) discussion of any objections or challenges raised by the current and original authors about the reproducibility attempt (if you contacted them).  None of these need to be long.-->
