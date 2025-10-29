@@ -1,5 +1,5 @@
 ---
-title: "Reproducibility Report for 'Scaling up the think-aloud method' by Wurgaft et al. (Proceedings of the Annual Meeting of the Cognitive Science Society 47, 2025)"
+title: "Reproducibility Report for 'Base Models Know How to Reason, Thinking Models Learn When' by Venhoff et al. (arXiv preprint: 2510.07364v3,2025)"
 author: "Linas Nasvytis (linasmn@stanford.edu)"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 format:
@@ -7,79 +7,91 @@ format:
     toc: true
     toc_depth: 3
 ---
-
 <!-- Reproducibility reports should all use this template to standardize reporting across projects. These reports will be public supplementary materials that accompany the summary report(s) of the aggregate results. -->
 
 ## Introduction
 <!-- [No abstract is needed.]  Each reproducibility project will have a straightforward, no frills report of the study and reproducibility results. These reports will be publicly available as supplementary material for the aggregate report(s) of the project as a whole.  Also, to maximize project integrity, the intro and methods will be written and critiqued in advance of your attempt to reproduce the results. Introductions can be just 1-2 paragraphs clarifying the main idea of the original study, the target finding for your reproducibility attempt, and any other essential information.  It will NOT have a literature review -- that is in the original publication. You can write both the introduction and the methods in past tense.-->
-The target study introduces an automated pipeline for transcribing, annotating, and analyzing verbal reasoning traces at scale, using the Game of 24 as a testbed. In the experiment, 640 participants were prompted to think aloud while solving arithmetic problems. The authors collected 4,947 high-quality verbal reports, transcribed them using Whisper large-v3, and annotated them as reasoning graphs using LLMs. These graph representations allowed for detailed analysis of participants’ reasoning strategies, including operation usage, subgoal setting, and consistency across trials. 
+The target study proposes a novel hybrid model that combines base language models with minimal, interpretable steering mechanisms to activate latent reasoning capabilities. Venhoff et al. demonstrate that large base models (e.g., Qwen2.5-32B, Yi-34B) already possess strong reasoning skills, and that a “thinking model” (e.g., DeepSeek-R1 or Claude 3.7) can guide **when** these reasoning circuits should be activated. Their method involves:  
+1. Discovering interpretable reasoning directions via Sparse Autoencoders trained on hidden states from chain-of-thought prompts;  
+2. Learning *steering vectors* aligned with reasoning-relevant behaviors (e.g., arithmetic steps, uncertainty, backtracking) by comparing base and thinking model predictions at the token level;  
+3. Applying these vectors **selectively**, using token-level classifications from the thinking model to steer the base model only at key points.
 
-The key result I aim to reproduce is the transformation of raw think-aloud audio into structured reasoning graphs, and in addition, the resulting insights about human reasoning patterns, including success predictors and consistency measures. Additional exploratory analyses may include re-running the annotation pipeline with alternate LLMs or modifying graph representation parameters to test robustness.
+I aim to reproduce the full hybrid steering model pipeline (Steps 1–3). Due to computational constraints, I will conduct this reproduction using Llama-3.1-8B as the base model (one of the four models evaluated in the original study). I will reimplement the sparse autoencoder-based direction discovery, use open-weight models (e.g., DeepSeek or Mixtral derivatives) for reasoning supervision, and evaluate whether lightweight steering improves performance over the unsteered base model.
 
 ### Justification for choice of study
 <!-- Please describe why you chose to reproduce the results of this study.-->
-Although I am in academic proximity to the authors, my PhD research focuses directly on analyzing chain-of-thought traces across both humans and language models. This study is one of the **only** papers to provide large-scale process-level human reasoning data derived from verbal protocols. Given the immensely strong methodological alignment with my research agenda, replicating this work would be very helpful for my research, allow me to build expertise in automated verbal report analysis and contribute to the broader scientific effort to validate new scalable approaches of verbal protocol analysis. 
+My PhD research focuses on large-scale analysis of chain-of-thought traces across both humans and language models -- an area that is in its complete infancy in terms of research. This study is one of the **only** works (1) whose authors are at an arm's length from myself, as some of the most prominent work has been published within Stanford's Psychology Department, (2) which directly addresses questions I am analyzing in my own work, and (3) whose reproduction would be immensely helpful in learning a new method for my research -- using mechanistic interpretability to analyze chain of thought reasoning in language models. 
 
-Furthermore, the original authors have agreed to share the full dataset and analysis code, which makes full reproducibility feasible.
+I am aware that since the paper is relatively new, it is only available as a pre-print. However, given how well it would fit both the scope of the project and my interests, this would be an immensely rewarding reproduction project to work on. While it would involve quite a bit of work, I am confident I could manage the workload and find the necessary computational resources for it. 
 
 ### Anticipated challenges
 <!--Do you anticipate running into any challenges when attempting to reproduce these result(s)? If so please, list them here.-->
-- Minor inconsistencies may arise due to updates in underlying tools (e.g., Whisper, Claude 3.5, or Python libraries).
-- Access to Claude 3.5 Sonnet may become limited or require API credits.
-- Some randomness in LLM outputs (e.g., during graph code generation) may introduce variability unless seeds and exact parameters are controlled.
-- Transcripts filtered as irrelevant by LLMs might vary slightly due to model versioning.
+- I will use **Llama-3.1-8B** as the base model (included in the original study), which may yield weaker steering effects compared to larger models.
+- I may need to substitute the “thinking model” (e.g., Claude 3.7) with an open-weight alternative for supervision, which could affect quality of the token-level steering signal.
+- Sparse autoencoder training and direction discovery will require GPU resources, though with sufficient time, I believe this is feasible. 
+- Randomness in model outputs and training may lead to variability in discovered directions or evaluation results.
+- Some implementation details (e.g., classifier thresholds, interpolation weights) are not fully specified and may require re-tuning.
 
 ### Links
 
-Project repository (on Github): https://github.com/psych251/wurgaft2025
+Project repository (on Github): https://github.com/psych251/venhoff2025
 
-Original paper (as hosted in your repo): https://arxiv.org/pdf/2505.23931?
+Original paper (as hosted in your repo): https://arxiv.org/pdf/2510.07364
 
 ## Methods
 
 ### Description of the steps required to reproduce the results
 <!--Please describe all the steps necessary to reproduce the key result(s) of this study.-->
-1. **Download shared data** (raw audio recordings, metadata, response logs) from the authors’ OSF/GitHub repository.
-2. **Transcribe all audio recordings** using OpenAI Whisper large-v3 with specified parameters (beam size 5, temperature fallback, silence threshold 20s).
-3. **Filter irrelevant transcripts** via rule-based and LLM-based classification (Llama 3.3 70B) using predefined prompts.
-4. **Generate reasoning graphs** from filtered transcripts using Claude 3.5 Sonnet, guided by 10 in-context examples and a shared `GraphBuilder` class.
-5. **Validate and repair generated graphs** using automated error detection and iterative model reruns (up to 5 iterations, temperature increased if errors persist).
-6. **Analyze graphs** to compute:
-   - Operation usage frequencies
-   - Subgoal types and frequencies
-   - Consistency metrics (Gini index over subsequences)
-   - Predictors of successful vs. failed trials
+1. **Model setup**
+   - Use `Llama-3.1-8B` as the base model (via HuggingFace or vLLM).
+   - Select an open-weight “thinking model” (e.g., `DeepSeek-MoE`, `Mixtral`, or similar) to act as a reasoning supervisor.
+
+2. **Data collection**
+   - Generate a dataset of chain-of-thought (CoT) traces by prompting the base and thinking models on arithmetic, symbolic, and reasoning tasks (e.g., GSM8K, Last Letter, or synthetic puzzles).
+
+3. **Sparse autoencoder training**
+   - Collect hidden states (e.g., MLP activations) from the base model on CoT prompts.
+   - Train a sparse autoencoder (SAE) to compress these states and extract interpretable latent directions.
+   - Identify individual neurons or features correlated with reasoning behaviors (e.g., arithmetic steps, uncertainty).
+
+4. **Steering vector extraction**
+   - Compare token-level outputs of the base and thinking models to label when steering is needed.
+   - Train simple classifiers (e.g., logistic regression) to predict when to apply each steering vector.
+   - Extract final steering directions by averaging latent components aligned with reasoning triggers.
+
+5. **Hybrid inference**
+   - For new inputs, run the classifier to determine which tokens need steering.
+   - Add the selected direction vector(s) to the base model’s hidden state at those positions (using vector addition or scaling).
+   - Run inference and evaluate accuracy.
+
+6. **Evaluation**
+   - Compare performance of: Base model without steering and Hybrid model with selective steering
+   - Report metrics such as task accuracy, token-level intervention rate, and example outputs.
    
 ### Differences from original study
 <!--Explicitly describe known differences in the analysis pipeline between the original paper and yours (e.g., computing environment). The goal, of course, is to minimize those differences, but differences may occur. Also, note whether such differences are anticipated to influence your ability to reproduce the original results.-->
-- If Claude 3.5 Sonnet is unavailable, I may substitute with alternative language models for annotation — including equally or more capable models. I will also compare these with open-weight alternatives (e.g., DeepSeek V3) to evaluate replicability across model classes.
-- Computational environment may differ (e.g., Python version, GPU setup).
-- Small divergences in Whisper transcription may occur due to model updates.
-- If needed, reproducibility of LLM steps may be increased by seeding or prompt standardization.
-
+- **Base model**: I will use `Llama-3.1-8B`, which is smaller than most models used in the original study (e.g., Yi-34B, Qwen2.5-32B). However, this model was included in their experiments, so results should still be comparable.
+- **Thinking model**: I will substitute the proprietary Claude 3.7 with an open-weight alternative (e.g., DeepSeek-v2 or Mixtral) for reasoning supervision. This may lead to differences in token-level steering decisions.
+- **Compute**: I will run all experiments on several older generation GPUs (NVIDIA A40), which may limit batch sizes and training speed for the sparse autoencoder and classifier components.
 
 ## Project Progress Check 1
 ### Measure of success
 <!-- Please describe the outcome measure for the success or failure of your reproduction and how this outcome will be computed.-->
-The reproduction will be considered successful if:
-- I can generate structured graphs from at least 90% of the same usable trials (≈4450 trials).
-- Key reported patterns (e.g., operation frequency, subgoal usage, Gini indices) are reproduced within a reasonable margin (±10% of original figures).
-- Agreement between reproduced and original graphs (via edit distance) matches reported reliability ranges (e.g., similar distribution of Claude vs. human edit distances).
+Reproduction success will be measured by the improvement in task accuracy (e.g., GSM8K or similar benchmark) when applying the learned steering vectors to the base model (`Llama-3.1-8B`), compared to the unsteered baseline.
 
+Specifically, success will be quantified as:
+
+**ΔAccuracy** = Accuracy(steered model) − Accuracy(base model)
+
+A successful reproduction will demonstrate a non-trivial gain (e.g., ≥2–3%) in performance using the hybrid steering method, along with qualitative alignment between discovered directions and reasoning-related behaviors (e.g., arithmetic steps, uncertainty).
 
 ### Pipeline progress
 <!-- Earlier in this report, you described the steps necessary to reproduce the key result(s) of this study. Please describe your progress on each of these steps (e.g., data preprocessing, model fitting, model evaluation).-->
-Done:
-- Raw audio data permission obtained
-
-Todo:
-- Whisper transcription pipeline
-- Graph annotation pipeline. 
-- Graph validation and repair automation not yet tested.
-- Downstream analysis pipeline.
+- **Model setup**: Completed. The base model (`Llama-3.1-8B`) is downloaded and ready for use.  
+- **Compute resources**: Confirmed. Multiple GPUs have been allocated for running the sparse autoencoder and steering experiments.  
+- **Next steps**: Prepare chain-of-thought datasets for hidden state extraction and begin training the sparse autoencoder on base model activations.
 
 ## Results
-As I haven't obtained the data, I don't yet have code for data preparation or any results.
 
 ### Data preparation
 <!--Data preparation following the analysis plan.-->
@@ -110,5 +122,4 @@ As I haven't obtained the data, I don't yet have code for data preparation or an
 <!--Open the discussion section with a paragraph summarizing the primary result from the key analysis and assess whether you successfully reproduced it, partially reproduced it, or failed to reproduce it.-->
 
 ### Commentary
-
 <!-- Add open-ended commentary (if any) reflecting (a) insights from follow-up exploratory analysis of the dataset, (b) assessment of the meaning of the successful or unsuccessful reproducibility attempt - e.g., for a failure to reproduce the original findings, are the differences between original and present analyses ones that definitely, plausibly, or are unlikely to have been moderators of the result, and (c) discussion of any objections or challenges raised by the current and original authors about the reproducibility attempt (if you contacted them).  None of these need to be long.-->
