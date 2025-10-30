@@ -1,5 +1,5 @@
 ---
-title: "Reproducibility Report for 'Base Models Know How to Reason, Thinking Models Learn When' by Venhoff et al. (arXiv preprint: 2510.07364v3,2025)"
+title: "Reproducibility Report for 'Base Models Know How to Reason, Thinking Models Learn When' by Venhoff et al. (arXiv preprint: 2510.07364v3, 2025)"
 author: "Linas Nasvytis (linasmn@stanford.edu)"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 format:
