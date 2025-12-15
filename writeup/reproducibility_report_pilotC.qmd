@@ -1,0 +1,176 @@
+---
+title: "Reproducibility Report for 'Base Models Know How to Reason, Thinking Models Learn When' by Venhoff et al. (arXiv preprint: 2510.07364v3, 2025)"
+author: "Linas Nasvytis (linasmn@stanford.edu)"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+format:
+  html:
+    toc: true
+    toc_depth: 3
+---
+<!-- Reproducibility reports should all use this template to standardize reporting across projects. These reports will be public supplementary materials that accompany the summary report(s) of the aggregate results. -->
+
+## Introduction
+<!-- [No abstract is needed.]  Each reproducibility project will have a straightforward, no frills report of the study and reproducibility results. These reports will be publicly available as supplementary material for the aggregate report(s) of the project as a whole.  Also, to maximize project integrity, the intro and methods will be written and critiqued in advance of your attempt to reproduce the results. Introductions can be just 1-2 paragraphs clarifying the main idea of the original study, the target finding for your reproducibility attempt, and any other essential information.  It will NOT have a literature review -- that is in the original publication. You can write both the introduction and the methods in past tense.-->
+The target study introduces a hybrid reasoning framework in which a base language model is selectively steered at inference time to exhibit reasoning behaviors characteristic of a “thinking model.” The core claim is that base models already contain latent reasoning mechanisms, and that post-training primarily teaches when to activate these mechanisms rather than how to perform them.
+
+The approach operationalizes this idea using steering vectors: learned directions in the base model’s activation space that causally induce specific reasoning behaviors (e.g., arithmetic execution, backtracking, uncertainty estimation). A hybrid inference procedure then combines a thinking model and a base model, using signals from the thinking model to decide which steering vector to apply at each token while the base model generates the output.
+
+This reproduction project focuses exclusively on the two central algorithmic components of the paper: (1) Training steering vectors for a base model using thinking-model supervision; (2) Training and evaluating the hybrid generation system that applies these vectors during inference.
+
+All other components described in the original paper (e.g., taxonomy discovery via sparse autoencoders) are treated as fixed inputs to these two stages and are not themselves reproduced.
+
+### Justification for choice of study
+<!-- Please describe why you chose to reproduce the results of this study.-->
+My PhD research focuses on the analysis of chain-of-thought reasoning in humans and language models, with particular interest in identifying and manipulating intermediate reasoning behaviors. This study is directly aligned with those goals, as it provides a concrete, mechanistic method for isolating reasoning behaviors and causally activating them in base models without parameter updates.
+
+Reproducing this work is especially valuable because it combines mechanistic interpretability with task-level evaluation, offering a rare opportunity to connect internal representations, controlled interventions, and downstream performance within a single framework.
+
+### Anticipated challenges
+<!--Do you anticipate running into any challenges when attempting to reproduce these result(s)? If so please, list them here.-->
+- Steering effects may be weaker or noisier at smaller model scales.
+- Hybrid token-level inference is computationally expensive and sensitive to hyperparameters (e.g., steering coefficients and window sizes).
+- Evaluation via numerical parsing may undercount correct answers with atypical formatting.
+
+### Links
+Project repository (on Github): https://github.com/psych251/venhoff2025
+
+Original paper (as hosted in your repo): https://arxiv.org/pdf/2510.07364
+
+## Methods
+### Description of the steps required to reproduce the results
+<!--Please describe all the steps necessary to reproduce the key result(s) of this study.-->
+This reproduction implements the same two-stage pipeline used in the original study, using one of the four base models evaluated by the authors: **Qwen2.5-Math-1.5B**.
+
+#### Step 1: Steering vector training
+Steering vectors are trained for a fixed base model (Qwen2.5-Math-1.5B) using supervision from a thinking model (DeepSeek-R1-Distill-Qwen-1.5B). Each steering vector is a learnable parameter with the same dimensionality as the base model’s hidden states at a chosen layer.
+
+Following the original study, I train a total of **16 steering vectors**: **15 category-specific steering vectors**, each corresponding to a distinct reasoning behavior (e.g., arithmetic execution, backtracking, uncertainty estimation), and **one general bias vector** capturing global stylistic and structural properties of thinking-model outputs.
+
+For each reasoning category, training examples consist of prefixes and target continuations derived from thinking-model reasoning traces. During optimization, the steering vector is added to the base model’s hidden states, and its parameters are updated to minimize cross-entropy loss on the thinking model’s target tokens, while keeping all base model weights frozen.
+
+#### Step 2: Hybrid model training and evaluation
+The hybrid model combines the base and thinking models during inference. At each token position, the thinking model provides a signal indicating which reasoning behavior should be activated. The corresponding category-specific steering vector (together with the bias vector) is applied to the base model’s activations.
+
+Multiple candidate continuations are evaluated **per token** using a perplexity-based guardrail under the thinking model. Hybrid performance is evaluated by comparing base-only, hybrid, and thinking-model outputs on mathematical reasoning benchmarks.
+
+   
+### Differences from original study
+<!--Explicitly describe known differences in the analysis pipeline between the original paper and yours (e.g., computing environment). The goal, of course, is to minimize those differences, but differences may occur. Also, note whether such differences are anticipated to influence your ability to reproduce the original results.-->
+- **Model**: I use the same base/thinking model pairing (Qwen2.5-Math-1.5B with DeepSeek-R1-Distill-Qwen-1.5B) and the same benchmark target (GSM8K) as in the original study, so this part is matched completely.
+- **Compute environment**: Experiments are run on NVIDIA A40 GPUs rather than the authors’ hardware. This may affect runtime and the practical breadth of sweeps (e.g., fewer coefficient/window settings explored), but should not change the core algorithmic procedure.
+- **Implementation details / defaults**: Where the paper leaves minor implementation choices implicit (e.g., smoothing/plotting conventions, logging, or exact sweep granularity), I follow the released repo scripts and my own engineering defaults; these choices may cause small numerical differences but should not change qualitative behavior.
+- **Evaluation method**: The original paper does not specify the exact method used to evaluate answer correctness. The released codebase supports two evaluation options: (1) **LLM-as-a-judge**, which compares the model’s full answer against the gold solution using a strong external model (GPT-4.1 is used by default in the repository); (2) **Numerical parsing**, which extracts and compares final numeric answers directly. Due to financial constraints (since LLM-based evaluation would require judging several thousand model outputs at significant cost) I use the **numerical parsing** evaluation method. While this approach is deterministic and cost-effective, it may differ from LLM-as-a-judge evaluation in cases where answers are correct but formatted atypically, or where reasoning is correct but the final numeric expression is ambiguous. This difference may lead to quantitative discrepancies relative to the paper’s reported accuracies, but should not affect the qualitative comparison between base, hybrid, and thinking models.
+
+## Project Progress Check 1
+### Measure of success
+<!-- Please describe the outcome measure for the success or failure of your reproduction and how this outcome will be computed.-->
+Reproduction success will be measured by replicating the **end-to-end hybrid model evaluation** reported for the **Qwen2.5-Math-1.5B** base model paired with **DeepSeek-R1-Distill-Qwen-1.5B** as the thinking model, on **GSM8K** benchmark.
+
+The primary outcome measure is **accuracy (%)** of the three models:
+
+- **Base**: unsteered base model accuracy  
+- **Hybrid**: token-level hybrid steering accuracy  
+- **Thinking**: thinking model accuracy  
+
+Success will be evaluated by comparing reproduced accuracies to the paper’s reported results for this model pair. For reference, the paper reports the following GSM8K accuracies (see figure from the paper below):
+
+- **Base:** 83.8%  
+- **Hybrid:** 80.8% (−3.0%)  
+- **Thinking:** 80.8% (−3.0%)  
+- **Gap recovery:** 0.0%
+
+It is important to note that this model pair corresponds to one of the four base models evaluated in the original study, and is also the smallest model configuration considered. In the paper, this setting is the only one in which the hybrid model does not outperform the base model, and the reported results show no gap recovery for this pair. Consequently, reproducing this behavior is not indicative of a failure of the method, but rather reflects a known limitation of the approach at smaller model scales.
+
+Due to computational constraints, this Qwen2.5-Math-1.5B configuration is the only model setting that can be fully reproduced within the scope of this project. As such, this reproduction focuses on matching the qualitative behavior and relative performance relationships (base vs. hybrid vs. thinking) reported for this model, rather than demonstrating gains that only emerge at larger scales.
+
+```{r original-accuracies, echo=FALSE, fig.align="center", fig.cap="GSM8K accuracy results for Qwen2.5-Math-1.5B (base) DeepSeek-R1-Distill-Qwen-1.5B (thinking), and hybrid models, reproduced directly from Venhoff et al. (2025)."}
+knitr::include_graphics("plots/hybrid/original_accuracy/qwen_original_accuracy.png")
+```
+
+### Pipeline progress
+<!-- Earlier in this report, you described the steps necessary to reproduce the key result(s) of this study. Please describe your progress on each of these steps (e.g., data preprocessing, model fitting, model evaluation).-->
+
+#### Pilot A
+**Steering vector training:** I have successfully trained steering vectors **1–3** for the base model (**Qwen2.5-Math-1.5B**) using the training pipeline from the paper. Across all three vectors, the training objective decreases consistently over optimization iterations, reflecting the expected convergence behavior and indicating that the steering-vector optimization procedure is functioning correctly (see training loss curves for each of the three vectors below). This is the first major step towards obtaining all 15 steering vectors, which will then be used to develop the hybrid model, and evaluate it on the GSM8K benchmark. 
+  
+```{r training-loss, echo=FALSE, fig.align="center", fig.cap="Training loss (smoothed) during steering vector optimization for vectors 1–3 using Qwen2.5-Math-1.5B."}
+knitr::include_graphics("plots/train_vectors/loss_vectors_1_3.png")
+```
+#### Pilot B
+Following the successful training of all 15 category-specific steering vectors and the general bias vector, I implemented the full hybrid inference pipeline as described in the original study. Using these learned vectors, I constructed the hybrid model that performs token-level steering of the base model (Qwen2.5-Math-1.5B) based on signals from the thinking model (DeepSeek-R1-Distill-Qwen-1.5B).
+
+To validate the end-to-end generation and evaluation pipeline while remaining within computational constraints, I evaluated the base, hybrid, and thinking models on the first 10 GSM8K examples. Answer correctness was assessed using the deterministic numeric parsing evaluation method implemented in the original codebase (i.e., the judge-free fallback described above). The resulting accuracies, shown in the table below, serve as an initial sanity check rather than a definitive performance estimate.
+
+While no strong conclusions can be drawn from such a small sample, the observed drop in hybrid accuracy was nevertheless surprising, particularly given that the full hybrid pipeline and the authors’ own parsing logic were used as faithfully as possible. To investigate this discrepancy, I manually inspected all 10 hybrid responses.
+
+This qualitative inspection performed by myself revealed that 6 out of the 10 hybrid responses were in fact correct, matching the performance of the base model on this subset. However, several correct hybrid answers were formatted differently from the gold solutions and from the base or thinking model outputs. For example, some hybrid responses concluded with formulations such as `\(\boxed{18}\)` dollars every day at the farmers' market, rather than explicitly stating a final answer using the GSM8K-style `####` marker or a plain numeric expression. As a result, these responses were marked incorrect by the numeric parsing heuristic despite being semantically and numerically correct.
+
+These observations suggest that part of the apparent accuracy drop is attributable to limitations of the parsing-based evaluation method used by the authors (which is the fallback compared to using an LLM-as-a-judge), rather than to genuine reasoning failures of the hybrid model. In the final report, I will therefore (i) continue to report results using the authors’ original parsing function for comparability, while also (ii) exploring more robust answer extraction heuristics that are better suited to the hybrid model’s output formatting.
+
+```{r accuracy-table, echo=FALSE}
+accuracy_df <- data.frame(
+  Base_Model = "Qwen2.5-Math-1.5B",
+  Thinking_Model = "DeepSeek-R1-Distill-Qwen-1.5B",
+  Base = "60.0%",
+  Hybrid = "60.0% (0.0%)",
+  Thinking = "20.0% (−66.67%)",
+  Gap_Recovery = "N/A"
+)
+
+knitr::kable(
+  accuracy_df,
+  col.names = c(
+    "Base Model",
+    "Thinking Model",
+    "Base",
+    "Hybrid",
+    "Thinking",
+    "Gap Recovery"
+  ),
+  align = "l",
+  caption = "Preliminary GSM8K accuracies for base, hybrid, and thinking models evaluated on the first 10 examples using numeric parsing. Results are intended as a sanity check rather than a definitive reproduction."
+)
+```
+
+#### Pilot C
+
+The final remaining step before running the full-scale evaluation concerns the **answer evaluation procedure**, specifically the numeric parsing heuristic used to determine correctness. While the parsing-based evaluation implemented in the original codebase is simple to understand and computationally efficient, the qualitative inspection performed in Pilot B indicates that it fails to recognize a non-trivial fraction of correct hybrid model outputs due to formatting differences (e.g., answers expressed using LaTeX-style constructs such as `\(\boxed{18}\)`)
+
+Given the scale of the full experiment (500 GSM8K problems), it won't be possible to manually inspect and all model responses. As a result, relying exclusively on the original numeric parsing heuristic would risk systematically underestimating hybrid model performance in cases where reasoning is correct, but answer formatting is different from the narrow patterns anticipated by the parser.
+
+Before running the full evaluation, I therefore plan to implement an **extended numeric parsing function** that remains backward-compatible with the authors’ original heuristic, while also accounting for additional common answer formats observed in hybrid outputs. This includes, but is not limited to, handling boxed answers, inline mathematical expressions, and final numeric statements embedded in prose. The goal of this extension is not to inflate performance artificially, but to ensure that semantically correct answers are not misclassified due to superficial formatting differences.
+
+In the final report, results will be presented using both the original parsing method (for strict comparability with the authors’ reported numbers) and the extended parsing method (to assess the robustness of conclusions to evaluation choice). This dual reporting will help disentangle genuine reasoning failures from artifacts introduced by evaluation heuristics, and will clarify the extent to which measured hybrid performance depends on the specifics of answer extraction.
+
+## Results
+
+### Data preparation
+<!--Data preparation following the analysis plan.-->
+```{r include=F}
+### Data Preparation
+
+#### Load Relevant Libraries and Functions
+
+#### Import data
+
+#### Data exclusion / filtering
+
+#### Prepare data for analysis - create columns etc.
+```
+
+### Key analysis
+<!--The analyses as specified in the analysis plan. -->
+
+*Side-by-side graph with original graph is ideal here*
+
+### Exploratory analyses
+<!-- Any follow-up analyses desired (not required).-->  
+
+## Discussion
+
+### Summary of Reproduction Attempt
+
+<!--Open the discussion section with a paragraph summarizing the primary result from the key analysis and assess whether you successfully reproduced it, partially reproduced it, or failed to reproduce it.-->
+
+### Commentary
+<!-- Add open-ended commentary (if any) reflecting (a) insights from follow-up exploratory analysis of the dataset, (b) assessment of the meaning of the successful or unsuccessful reproducibility attempt - e.g., for a failure to reproduce the original findings, are the differences between original and present analyses ones that definitely, plausibly, or are unlikely to have been moderators of the result, and (c) discussion of any objections or challenges raised by the current and original authors about the reproducibility attempt (if you contacted them).  None of these need to be long.-->
